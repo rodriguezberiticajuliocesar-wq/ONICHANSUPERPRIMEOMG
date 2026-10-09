@@ -1,7 +1,10 @@
 -- =====================================================
 -- SLK VORTEX - MUSCLE LEGENDS (Version 3.1)
--- Anti-Lag Automático (698 reps/s controlado)
+-- Enfoque: Modo Seguro (Anti-Detección) + Anti-Lag
 -- =====================================================
+
+-- ✅ MODO SEGURO ACTIVADO (Lo más importante para no ser detectado)
+getgenv().RAYFIELD_SECURE = true
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -18,15 +21,14 @@ _G.AutoEvolve = false
 _G.AutoBuyPets = false
 
 -- Variables del Anti-Lag
-local TargetReps = 698 -- Reps por segundo objetivo
-local FrameTime = 1 / TargetReps -- Tiempo ideal entre ciclos (≈0.00143s)
-local LastCycleTime = 0
-local LagCompensation = 0 -- Ajuste dinámico
+local TargetReps = 698
+local FrameTime = 1 / TargetReps
+local LagCompensation = 0
 
 local Window = Rayfield:CreateWindow({
    Name = "SLK VORTEX",
    LoadingTitle = "Cargando SLK VORTEX...",
-   LoadingSubtitle = "by SLK Team | Anti-Lag Mode",
+   LoadingSubtitle = "by SLK Team | Stealth Mode",
    ConfigurationSaving = {
       Enabled = true,
       FolderName = "SLK_VORTEX",
@@ -40,99 +42,70 @@ local Window = Rayfield:CreateWindow({
 -- =====================================================
 local FarmTab = Window:CreateTab("Farm", 4483362458)
 
--- Función principal de farmeo con Anti-Lag
 local function StartFarm()
     local event = RS:FindFirstChild("MuscleEvent") or LP:FindFirstChild("MuscleEvent")
     if not event then return end
     
-    -- Bucle de farmeo con compensación de lag
     while _G.AutoFarm or _G.FastRep do
-        -- Medir tiempo de inicio del ciclo
         local CycleStart = tick()
         
-        -- Ejecutar golpes (izquierda y derecha)
         pcall(function()
             event:FireServer("punch", "leftHand")
             event:FireServer("punch", "rightHand")
         end)
         
-        -- Calcular cuánto tardó este ciclo
         local CycleTime = tick() - CycleStart
-        
-        -- Calcular el tiempo de espera necesario para mantener las 698 reps/s
-        -- Si el ciclo tardó más que FrameTime, no esperamos (el juego ya va lento)
-        -- Si tardó menos, esperamos la diferencia para no saturar
         local WaitTime = FrameTime - CycleTime
         
-        -- Aplicar compensación de lag: si el juego está muy lento, reducimos la espera
-        -- para intentar mantener el ritmo sin crashear
         if CycleTime > FrameTime then
-            -- El juego está lento, no añadimos espera adicional
             WaitTime = 0
-            -- Aumentar el LagCompensation para futuros ciclos
             LagCompensation = math.min(LagCompensation + 0.0001, 0.01)
         else
-            -- El juego va bien, esperamos la diferencia + compensación
             WaitTime = WaitTime + LagCompensation
-            -- Reducir la compensación gradualmente
             LagCompensation = math.max(LagCompensation - 0.00001, 0)
         end
         
-        -- Solo esperamos si es necesario (evita lag innecesario)
         if WaitTime > 0 then
             task.wait(WaitTime)
         end
     end
 end
 
--- Toggle: Auto Farm con Anti-Lag
 FarmTab:CreateToggle({
    Name = "Auto Farm (Anti-Lag)",
    CurrentValue = false,
    Flag = "AutoFarmToggle",
    Callback = function(Value)
        _G.AutoFarm = Value
-       if Value then
-           task.spawn(StartFarm)
-       end
+       if Value then task.spawn(StartFarm) end
    end,
 })
 
--- Toggle: Fast Reps con Anti-Lag (698 reps/s)
 FarmTab:CreateToggle({
    Name = "Fast Reps ⚡ (698 reps/s Anti-Lag)",
    CurrentValue = false,
    Flag = "FastRepsToggle",
    Callback = function(Value)
        _G.FastRep = Value
-       if Value then
-           task.spawn(StartFarm)
-       end
+       if Value then task.spawn(StartFarm) end
    end,
 })
 
--- Slider para ajustar las reps objetivo
 FarmTab:CreateSlider({
    Name = "Reps por Segundo (Objetivo)",
-   Range = {100, 999}, -- ✅ Corregido: llaves en lugar de corchetes
+   Range = {100, 999},
    Increment = 1,
    Suffix = " reps/s",
    CurrentValue = 698,
    Flag = "RepsSlider",
    Callback = function(Value)
        TargetReps = Value
-       FrameTime = 1 / TargetReps -- Recalcular el tiempo ideal
+       FrameTime = 1 / TargetReps
    end,
 })
 
--- Texto informativo del estado del Anti-Lag
-FarmTab:CreateParagraph({
-   Title = "Estado del Anti-Lag",
-   Content = "Objetivo: " .. TargetReps .. " reps/s | Compensación dinámica activa"
-})
-
 -- =====================================================
--- PESTAÑA: REBIRTH (sin cambios)
+-- PESTAÑA: REBIRTH
 -- =====================================================
 local RebirthTab = Window:CreateTab("Rebirth", 4483362458)
 
@@ -189,7 +162,7 @@ RebirthTab:CreateToggle({
 })
 
 -- =====================================================
--- PESTAÑA: PETS (sin cambios)
+-- PESTAÑA: PETS
 -- =====================================================
 local PetsTab = Window:CreateTab("Pets", 4483362458)
 
@@ -249,15 +222,14 @@ PetsTab:CreateToggle({
 -- PESTAÑA: INFO
 -- =====================================================
 local InfoTab = Window:CreateTab("Info", 4483362458)
-
 InfoTab:CreateSection("Estado del Script")
-InfoTab:CreateParagraph({ Title = "SLK VORTEX", Content = "Versión: 3.1 | Estado: Activo\nModo: Anti-Lag Automático." })
+InfoTab:CreateParagraph({ Title = "SLK VORTEX", Content = "Versión: 3.1 | Estado: Activo\nModo: Secure + Anti-Lag." })
 
 Rayfield:LoadConfiguration()
 
 Rayfield:Notify({
    Title = "SLK VORTEX",
-   Content = "Script cargado con Anti-Lag Automático.",
+   Content = "Script cargado en Modo Seguro.",
    Duration = 5,
    Image = 4483362458
 })
