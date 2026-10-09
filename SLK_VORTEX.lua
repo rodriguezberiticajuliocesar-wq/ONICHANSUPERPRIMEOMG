@@ -655,22 +655,117 @@ end)
 tabs.fast:AddLabel("🔧 400-1000 reps/s | Ping auto-ajustado")
 
 -- =====================================================
--- FAST REBIRTH SIMPLE (Sin tocar mascotas)
+-- FAST REBIRTH (Guarda y re-equipa mascotas automáticamente)
 -- =====================================================
-tabs.fast:AddLabel("🔄 Fast Rebirth (Simple):")
+tabs.fast:AddLabel("🔄 Fast Rebirth (Auto-Reequip Pets):")
 
 tabs.fast.FastRebirthData = {
     Running = false,
     TargetRebirths = 0,
     TotalRebirths = 0,
     RepsPerBurst = 12,
-    RepDelay = 0.05
+    RepDelay = 0.05,
+    LastEquippedPets = {}  -- Guarda las mascotas equipadas
 }
 
 tabs.fast.FastRebirthStatus = tabs.fast:AddLabel("Status: Inactive")
 tabs.fast.FastRebirthStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
 
-tabs.fast.FastRebirthStats = tabs.fast:AddLabel("Rebirths: 0 | Gained: 0")
+tabs.fast.FastRebirthStats = tabs.fast:AddLabel("Rebirths: 0 | Gained: 0 | Pets: 0")
+
+-- 🔍 Detectar todas las mascotas equipadas actualmente
+function tabs.fast.getEquippedPets()
+    local equipped = {}
+    local player = services.Players.LocalPlayer
+    local petsFolder = player:FindFirstChild("petsFolder")
+    if not petsFolder then return equipped end
+
+    -- Recorre TODAS las carpetas del petsFolder buscando mascotas equipadas
+    for _, folder in pairs(petsFolder:GetChildren()) do
+        if folder:IsA("Folder") and folder.Name ~= "Unique" then
+            for _, pet in pairs(folder:GetChildren()) do
+                -- Verifica si la mascota está equipada (por atributo o por nombre de carpeta)
+                local isEquipped = pet:GetAttribute("Equipped") == true
+                    or folder.Name:lower():find("equip")
+                    or pet.Parent.Name:lower():find("equip")
+
+                if isEquipped then
+                    table.insert(equipped, {
+                        Name = pet.Name,
+                        Reference = pet,
+                        OriginalFolder = folder.Name
+                    })
+                end
+            end
+        end
+    end
+
+    -- También revisa si hay mascotas equipadas directamente en el Character
+    local char = player.Character
+    if char then
+        for _, obj in pairs(char:GetChildren()) do
+            if obj:IsA("StringValue") or obj:IsA("ObjectValue") or obj:IsA("Model") then
+                if obj.Name:lower():find("pet") or obj.Name:lower():find("golem") then
+                    table.insert(equipped, {
+                        Name = obj.Name,
+                        Reference = obj,
+                        OriginalFolder = "Character"
+                    })
+                end
+            end
+        end
+    end
+
+    return equipped
+end
+
+-- 🔄 Re-equipar todas las mascotas guardadas
+function tabs.fast.reequipPets(petsList)
+    if not petsList or #petsList == 0 then return 0 end
+    if not utils.remotes.EquipPetEvent then return 0 end
+
+    local player = services.Players.LocalPlayer
+    local petsFolder = player:FindFirstChild("petsFolder")
+    if not petsFolder then return 0 end
+
+    local uniqueFolder = petsFolder:FindFirstChild("Unique")
+    if not uniqueFolder then return 0 end
+
+    local reequipped = 0
+    local usedRefs = {}
+
+    -- Primero intenta con las referencias guardadas
+    for _, petInfo in ipairs(petsList) do
+        if petInfo.Reference and petInfo.Reference.Parent and not usedRefs[petInfo.Reference] then
+            pcall(function()
+                utils.remotes.EquipPetEvent:FireServer("equipPet", petInfo.Reference)
+            end)
+            usedRefs[petInfo.Reference] = true
+            reequipped = reequipped + 1
+            task.wait(0.05)
+        end
+    end
+
+    -- Si no se re-equiparon todas, busca por nombre en Unique
+    if reequipped < #petsList then
+        for _, petInfo in ipairs(petsList) do
+            if reequipped >= #petsList then break end
+            for _, uniquePet in pairs(uniqueFolder:GetChildren()) do
+                if uniquePet.Name == petInfo.Name and not usedRefs[uniquePet] then
+                    pcall(function()
+                        utils.remotes.EquipPetEvent:FireServer("equipPet", uniquePet)
+                    end)
+                    usedRefs[uniquePet] = true
+                    reequipped = reequipped + 1
+                    task.wait(0.05)
+                    break
+                end
+            end
+        end
+    end
+
+    return reequipped
+end
 
 tabs.fast.FastRebirthWorker = function()
     local startRebirths = utils.playerData.Rebirths and utils.playerData.Rebirths.Value or 0
@@ -687,12 +782,25 @@ tabs.fast.FastRebirthWorker = function()
             break
         end
 
-        -- Calcular fuerza necesaria para el próximo rebirth
+        -- Calcular fuerza necesaria
         local targetStrength = 5000 + currentReb * 2550
         local currentStrength = utils.playerData.Strength and utils.playerData.Strength.Value or 0
 
-        -- Si ya tenemos la fuerza, hacer rebirth
         if currentStrength >= targetStrength then
+            -- ⚡ PASO 1: Guardar mascotas equipadas ANTES del rebirth
+            tabs.fast.FastRebirthStatus.Text = "Status: 📸 Guardando mascotas..."
+            tabs.fast.FastRebirthStatus.TextColor3 = Color3.fromRGB(255, 200, 80)
+
+            local savedPets = tabs.fast.getEquippedPets()
+            tabs.fast.FastRebirthData.LastEquippedPets = savedPets
+
+            tabs.fast.FastRebirthStats.Text = "Rebirths: "
+                .. utils.formatWithCommas(currentReb)
+                .. " | Pets guardadas: " .. #savedPets
+
+            task.wait(0.2)
+
+            -- ⚡ PASO 2: Hacer rebirth
             tabs.fast.FastRebirthStatus.Text = "Status: 🔄 Haciendo Rebirth..."
             tabs.fast.FastRebirthStatus.TextColor3 = Color3.fromRGB(255, 200, 80)
 
@@ -711,14 +819,30 @@ tabs.fast.FastRebirthWorker = function()
                 or (utils.playerData.Rebirths and utils.playerData.Rebirths.Value > rebirthBefore)
                 or attempts >= 30
 
-            if utils.playerData.Rebirths and utils.playerData.Rebirths.Value > rebirthBefore then
+            local rebirthSuccess = utils.playerData.Rebirths and utils.playerData.Rebirths.Value > rebirthBefore
+
+            if rebirthSuccess then
                 tabs.fast.FastRebirthData.TotalRebirths = tabs.fast.FastRebirthData.TotalRebirths +
                     (utils.playerData.Rebirths.Value - rebirthBefore)
+
+                -- ⚡ PASO 3: Re-equipar mascotas guardadas
+                if #savedPets > 0 then
+                    tabs.fast.FastRebirthStatus.Text = "Status: 🔁 Re-equipando mascotas..."
+                    tabs.fast.FastRebirthStatus.TextColor3 = Color3.fromRGB(150, 150, 255)
+
+                    -- Espera a que el juego termine el respawn
+                    task.wait(1.5)
+
+                    local reequipped = tabs.fast.reequipPets(savedPets)
+
+                    tabs.fast.FastRebirthStatus.Text = "Status: ✅ " .. reequipped .. "/" .. #savedPets .. " mascotas re-equipadas"
+                    tabs.fast.FastRebirthStatus.TextColor3 = Color3.fromRGB(80, 255, 120)
+                end
             end
 
             task.wait(0.5)
         else
-            -- Farmear fuerza (sin tocar mascotas)
+            -- Farmear fuerza (con mascotas intactas)
             tabs.fast.FastRebirthStatus.Text = "Status: 💪 Farmeando... "
                 .. utils.formatNumber(currentStrength)
                 .. " / " .. utils.formatNumber(targetStrength)
@@ -741,6 +865,7 @@ tabs.fast.FastRebirthWorker = function()
             .. utils.formatWithCommas(utils.playerData.Rebirths and utils.playerData.Rebirths.Value or 0)
             .. " | Gained: "
             .. utils.formatWithCommas((utils.playerData.Rebirths and utils.playerData.Rebirths.Value or 0) - startRebirths)
+            .. " | Pets: " .. #(tabs.fast.FastRebirthData.LastEquippedPets or {})
     end
 end
 
@@ -751,7 +876,7 @@ tabs.fast:AddTextBox("Target rebirths (0 = inf):", function(text)
     end
 end, {clear = false})
 
-tabs.fast.FastRebirthToggle = tabs.fast:AddSwitch("Fast Rebirth 🔄", function(state)
+tabs.fast.FastRebirthToggle = tabs.fast:AddSwitch("Fast Rebirth 🔄 (Auto-Reequip)", function(state)
     tabs.fast.FastRebirthData.Running = state
     if state then
         tabs.fast.FastRebirthStatus.Text = "Status: 🔄 Iniciando..."
@@ -763,7 +888,7 @@ tabs.fast.FastRebirthToggle = tabs.fast:AddSwitch("Fast Rebirth 🔄", function(
     end
 end)
 
-tabs.fast:AddLabel("Farmea + Rebirth sin tocar tus mascotas")
+tabs.fast:AddLabel("💾 Guarda y re-equipa tus mascotas automáticamente")
 
 -- =====================================================
 -- TAB KILLING: Kill Aura + Kill Everyone
