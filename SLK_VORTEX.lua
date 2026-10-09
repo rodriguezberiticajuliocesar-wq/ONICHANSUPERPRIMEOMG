@@ -1,8 +1,7 @@
 -- =====================================================
--- SLK VORTEX - MUSCLE LEGENDS (Version 8.1 FINAL)
--- Interfaz: Elerium V2 (desde tu repo)
--- Técnicas: Basadas en SilenceScripts
--- Fast Rebirth Simple (sin tocar mascotas)
+-- SLK VORTEX - MUSCLE LEGENDS (Version 9.0 FINAL)
+-- Interfaz: Elerium V2
+-- Fast Rebirth con Auto-Reequip de mascotas
 -- =====================================================
 
 -- =====================================================
@@ -39,7 +38,6 @@ utils.playerData = {
 
 utils.playerData.Humanoid = utils.playerData.Character and utils.playerData.Character:FindFirstChildOfClass("Humanoid")
 
--- Obtener muscleEvent de forma segura (con espera)
 function utils.getMuscleEvent()
     local player = services.Players.LocalPlayer
     local event = player:FindFirstChild("muscleEvent")
@@ -54,11 +52,9 @@ function utils.getMuscleEvent()
     return event
 end
 
--- Esperar al evento principal
 utils.remotes = {}
 utils.remotes.MuscleEvent = utils.getMuscleEvent()
 
--- Otros remotes con espera segura
 function utils.getRemote(parent, name)
     if not parent then return nil end
     local remote = parent:FindFirstChild(name)
@@ -84,7 +80,6 @@ utils.remotes.GiftRemote = rEvents and utils.getRemote(rEvents, "giftRemote")
 utils.remotes.OpenFortuneWheelRemote = rEvents and utils.getRemote(rEvents, "openFortuneWheelRemote")
 utils.remotes.PetShopRemote = rEvents and utils.getRemote(rEvents, "cPetShopRemote")
 
--- Esperar leaderstats
 local leaderstats = services.Players.LocalPlayer:WaitForChild("leaderstats", 30)
 utils.playerData.Strength = leaderstats and leaderstats:WaitForChild("Strength", 15)
 utils.playerData.Rebirths = leaderstats and leaderstats:WaitForChild("Rebirths", 15)
@@ -121,8 +116,22 @@ function utils.connect(signal, callback)
     return signal:Connect(callback)
 end
 
+-- Toggle para seleccionar múltiples items
+function utils.toggleSelection(selected, selectedList, value, label, prefix)
+    if selected[value] then
+        selected[value] = nil
+        for index = #selectedList, 1, -1 do
+            if selectedList[index] == value then table.remove(selectedList, index) end
+        end
+    else
+        selected[value] = true
+        table.insert(selectedList, value)
+    end
+    label.Text = prefix .. (#selectedList > 0 and table.concat(selectedList, ", ") or "None")
+end
+
 -- =====================================================
--- CARGAR LIBRERÍA (Elerium V2 desde tu repo)
+-- CARGAR LIBRERÍA (Elerium V2)
 -- =====================================================
 local library_url = "https://raw.githubusercontent.com/rodriguezberiticajuliocesar-wq/SilenceScripts/refs/heads/main/libraries/eleriumv2.luau?cache=" .. tostring(os.time())
 local librarySuccess, library = pcall(function()
@@ -132,7 +141,7 @@ end)
 if not librarySuccess or not library then
     game.StarterGui:SetCore("SendNotification", {
         Title = "SLK VORTEX",
-        Text = "❌ Error al cargar la interfaz. Verifica tu conexión.",
+        Text = "❌ Error al cargar la interfaz.",
         Duration = 5
     })
     return
@@ -154,6 +163,7 @@ local tabs = {
     main = Window:AddTab("Main"),
     farming = Window:AddTab("Farming"),
     fast = Window:AddTab("⚡ Fast"),
+    pets = Window:AddTab("Pets"),
     killing = Window:AddTab("Killing"),
     stats = Window:AddTab("Stats"),
     info = Window:AddTab("Info")
@@ -164,7 +174,7 @@ for _, tab in pairs(tabs) do
 end
 
 -- =====================================================
--- TAB MAIN: Ajustes del Jugador
+-- TAB MAIN
 -- =====================================================
 tabs.main:AddLabel("⚙️ User Settings:")
 
@@ -174,7 +184,6 @@ tabs.main.Settings = {
     FOV = {Value = 70, Enabled = false}
 }
 
--- SIZE
 tabs.main:AddTextBox("Size:", function(text)
     text = string.gsub(text, "%s+", "")
     if tonumber(text) and tonumber(text) > 0 then
@@ -199,7 +208,6 @@ task.spawn(function()
     end
 end)
 
--- SPEED
 tabs.main:AddTextBox("Speed:", function(text)
     text = string.gsub(text, "%s+", "")
     if tonumber(text) and tonumber(text) > 0 then
@@ -224,7 +232,6 @@ task.spawn(function()
     end
 end)
 
--- FOV
 tabs.main:AddTextBox("FOV (1-120):", function(text)
     text = string.gsub(text, "%s+", "")
     if tonumber(text) and tonumber(text) >= 1 and tonumber(text) <= 120 then
@@ -242,8 +249,7 @@ end)
 tabs.main:AddLabel("🛡️ Protection:")
 
 tabs.main.Protection = {
-    AntiFling = {Enabled = false},
-    PositionLock = {Enabled = false, Position = nil}
+    AntiFling = {Enabled = false}
 }
 
 function tabs.main.enableAntiFling()
@@ -275,7 +281,6 @@ tabs.main:AddSwitch("Anti Fling", function(bool)
     if bool then tabs.main.enableAntiFling() else tabs.main.disableAntiFling() end
 end)
 
--- Infinite Jump
 _G.SLKInfiniteJump = false
 tabs.main:AddSwitch("Infinite Jump", function(bool)
     _G.SLKInfiniteJump = bool
@@ -291,7 +296,6 @@ services.UserInputService.JumpRequest:Connect(function()
     end
 end)
 
--- Hide Pets
 tabs.main:AddSwitch("Hide Pets", function(state)
     if utils.remotes.ShowPetsEvent then
         pcall(function()
@@ -300,14 +304,12 @@ tabs.main:AddSwitch("Hide Pets", function(state)
     end
 end)
 
--- Change Time
 tabs.main.TimeDropdown = tabs.main:AddDropdown("Change Time", function(selection)
     services.Lighting.ClockTime = selection == "Night" and 0 or 9
 end)
 tabs.main.TimeDropdown:Add("Night")
 tabs.main.TimeDropdown:Add("Day")
 
--- Fortune Wheel
 tabs.main.FortuneWheelData = {
     Running = false,
     Generation = 0
@@ -339,7 +341,7 @@ tabs.main:AddSwitch("Spin Fortune Wheel", function(state)
 end)
 
 -- =====================================================
--- TAB FARMING: Auto Rebirth Simple + Auto Rep
+-- TAB FARMING
 -- =====================================================
 tabs.farming:AddLabel("🔄 Auto Rebirth (Simple):")
 
@@ -390,7 +392,6 @@ task.spawn(function()
     end
 end)
 
--- Auto Size 1
 tabs.farming.SizeData = {Active = false}
 tabs.farming.SizeSwitch = tabs.farming:AddSwitch("Auto Size 1", function(bool) tabs.farming.SizeData.Active = bool end)
 
@@ -407,7 +408,6 @@ task.spawn(function()
     end
 end)
 
--- Auto King
 tabs.farming.KingData = {TargetPosition = CFrame.new(-8665.4, 17.21, -5792.9), TeleportActive = false}
 tabs.farming.KingSwitch = tabs.farming:AddSwitch("Auto King", function(enabled)
     tabs.farming.KingData.TeleportActive = enabled
@@ -429,7 +429,6 @@ task.spawn(function()
     end
 end)
 
--- Auto Exercises
 tabs.farming:AddLabel("💪 Auto Exercises:")
 
 tabs.farming.ExerciseData = {
@@ -492,7 +491,6 @@ tabs.farming.ToolExerciseSwitch = tabs.farming:AddSwitch("Start Exercising", fun
     end
 end)
 
--- Auto Rep
 tabs.farming.AutoRepRunning = false
 tabs.farming.AutoRepSwitch = tabs.farming:AddSwitch("Auto Rep", function(state)
     tabs.farming.AutoRepRunning = state
@@ -510,7 +508,6 @@ tabs.farming.AutoRepSwitch = tabs.farming:AddSwitch("Auto Rep", function(state)
     end)
 end)
 
--- Auto Rock
 tabs.farming:AddLabel("🪨 Auto Rock:")
 
 tabs.farming.RockData = {
@@ -563,7 +560,7 @@ tabs.farming.RockSwitch = tabs.farming:AddSwitch("Auto Rock", function(enabled)
 end)
 
 -- =====================================================
--- TAB FAST: Fast Rep + Fast Rebirth Simple
+-- TAB FAST: Fast Rep + Fast Rebirth (con Auto-Reequip)
 -- =====================================================
 tabs.fast:AddLabel("⚡ Fast Rep (Ping Control):")
 
@@ -575,7 +572,6 @@ tabs.fast.FastRepData = {
     PingControl = true
 }
 
--- Ping con protección por si Stats no está
 local networkStats
 pcall(function()
     networkStats = services.Stats.Network.ServerStatsItem["Data Ping"]
@@ -586,7 +582,6 @@ tabs.fast.FastRepStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
 
 tabs.fast.FastRepWorkerLoop = function()
     while tabs.fast.FastRepData.Running do
-        -- Actualizar ping cada 0.5s
         if tick() - tabs.fast.FastRepData.LastPingCheck > 0.5 then
             if networkStats then
                 pcall(function()
@@ -611,7 +606,6 @@ tabs.fast.FastRepWorkerLoop = function()
             end
         end
 
-        -- Enviar reps (batch por frame)
         local repsToSend = math.floor(tabs.fast.FastRepData.SendRate / 60)
         if repsToSend < 1 then repsToSend = 1 end
         if repsToSend > 12 then repsToSend = 12 end
@@ -625,7 +619,6 @@ tabs.fast.FastRepWorkerLoop = function()
             end
         end
 
-        -- Actualizar status
         tabs.fast.FastRepStatus.Text = "Status: " .. tabs.fast.FastRepData.SendRate
             .. " reps/s | " .. math.floor(tabs.fast.FastRepData.CurrentPing) .. " ms"
         tabs.fast.FastRepStatus.TextColor3 = Color3.fromRGB(80, 255, 120)
@@ -655,7 +648,7 @@ end)
 tabs.fast:AddLabel("🔧 400-1000 reps/s | Ping auto-ajustado")
 
 -- =====================================================
--- FAST REBIRTH (Guarda y re-equipa mascotas automáticamente)
+-- FAST REBIRTH (Auto-Reequip mascotas)
 -- =====================================================
 tabs.fast:AddLabel("🔄 Fast Rebirth (Auto-Reequip Pets):")
 
@@ -665,7 +658,7 @@ tabs.fast.FastRebirthData = {
     TotalRebirths = 0,
     RepsPerBurst = 12,
     RepDelay = 0.05,
-    LastEquippedPets = {}  -- Guarda las mascotas equipadas
+    LastEquippedPets = {}
 }
 
 tabs.fast.FastRebirthStatus = tabs.fast:AddLabel("Status: Inactive")
@@ -673,18 +666,15 @@ tabs.fast.FastRebirthStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
 
 tabs.fast.FastRebirthStats = tabs.fast:AddLabel("Rebirths: 0 | Gained: 0 | Pets: 0")
 
--- 🔍 Detectar todas las mascotas equipadas actualmente
 function tabs.fast.getEquippedPets()
     local equipped = {}
     local player = services.Players.LocalPlayer
     local petsFolder = player:FindFirstChild("petsFolder")
     if not petsFolder then return equipped end
 
-    -- Recorre TODAS las carpetas del petsFolder buscando mascotas equipadas
     for _, folder in pairs(petsFolder:GetChildren()) do
         if folder:IsA("Folder") and folder.Name ~= "Unique" then
             for _, pet in pairs(folder:GetChildren()) do
-                -- Verifica si la mascota está equipada (por atributo o por nombre de carpeta)
                 local isEquipped = pet:GetAttribute("Equipped") == true
                     or folder.Name:lower():find("equip")
                     or pet.Parent.Name:lower():find("equip")
@@ -700,7 +690,6 @@ function tabs.fast.getEquippedPets()
         end
     end
 
-    -- También revisa si hay mascotas equipadas directamente en el Character
     local char = player.Character
     if char then
         for _, obj in pairs(char:GetChildren()) do
@@ -719,7 +708,6 @@ function tabs.fast.getEquippedPets()
     return equipped
 end
 
--- 🔄 Re-equipar todas las mascotas guardadas
 function tabs.fast.reequipPets(petsList)
     if not petsList or #petsList == 0 then return 0 end
     if not utils.remotes.EquipPetEvent then return 0 end
@@ -734,7 +722,6 @@ function tabs.fast.reequipPets(petsList)
     local reequipped = 0
     local usedRefs = {}
 
-    -- Primero intenta con las referencias guardadas
     for _, petInfo in ipairs(petsList) do
         if petInfo.Reference and petInfo.Reference.Parent and not usedRefs[petInfo.Reference] then
             pcall(function()
@@ -746,7 +733,6 @@ function tabs.fast.reequipPets(petsList)
         end
     end
 
-    -- Si no se re-equiparon todas, busca por nombre en Unique
     if reequipped < #petsList then
         for _, petInfo in ipairs(petsList) do
             if reequipped >= #petsList then break end
@@ -773,7 +759,6 @@ tabs.fast.FastRebirthWorker = function()
     while tabs.fast.FastRebirthData.Running do
         local currentReb = utils.playerData.Rebirths and utils.playerData.Rebirths.Value or 0
 
-        -- Verificar target alcanzado
         if tabs.fast.FastRebirthData.TargetRebirths > 0
             and currentReb >= tabs.fast.FastRebirthData.TargetRebirths then
             tabs.fast.FastRebirthStatus.Text = "Status: ✅ Target alcanzado"
@@ -782,12 +767,10 @@ tabs.fast.FastRebirthWorker = function()
             break
         end
 
-        -- Calcular fuerza necesaria
         local targetStrength = 5000 + currentReb * 2550
         local currentStrength = utils.playerData.Strength and utils.playerData.Strength.Value or 0
 
         if currentStrength >= targetStrength then
-            -- ⚡ PASO 1: Guardar mascotas equipadas ANTES del rebirth
             tabs.fast.FastRebirthStatus.Text = "Status: 📸 Guardando mascotas..."
             tabs.fast.FastRebirthStatus.TextColor3 = Color3.fromRGB(255, 200, 80)
 
@@ -800,7 +783,6 @@ tabs.fast.FastRebirthWorker = function()
 
             task.wait(0.2)
 
-            -- ⚡ PASO 2: Hacer rebirth
             tabs.fast.FastRebirthStatus.Text = "Status: 🔄 Haciendo Rebirth..."
             tabs.fast.FastRebirthStatus.TextColor3 = Color3.fromRGB(255, 200, 80)
 
@@ -825,24 +807,21 @@ tabs.fast.FastRebirthWorker = function()
                 tabs.fast.FastRebirthData.TotalRebirths = tabs.fast.FastRebirthData.TotalRebirths +
                     (utils.playerData.Rebirths.Value - rebirthBefore)
 
-                -- ⚡ PASO 3: Re-equipar mascotas guardadas
                 if #savedPets > 0 then
                     tabs.fast.FastRebirthStatus.Text = "Status: 🔁 Re-equipando mascotas..."
                     tabs.fast.FastRebirthStatus.TextColor3 = Color3.fromRGB(150, 150, 255)
 
-                    -- Espera a que el juego termine el respawn
                     task.wait(1.5)
 
                     local reequipped = tabs.fast.reequipPets(savedPets)
 
-                    tabs.fast.FastRebirthStatus.Text = "Status: ✅ " .. reequipped .. "/" .. #savedPets .. " mascotas re-equipadas"
+                    tabs.fast.FastRebirthStatus.Text = "Status: ✅ " .. reequipped .. "/" .. #savedPets .. " mascotas"
                     tabs.fast.FastRebirthStatus.TextColor3 = Color3.fromRGB(80, 255, 120)
                 end
             end
 
             task.wait(0.5)
         else
-            -- Farmear fuerza (con mascotas intactas)
             tabs.fast.FastRebirthStatus.Text = "Status: 💪 Farmeando... "
                 .. utils.formatNumber(currentStrength)
                 .. " / " .. utils.formatNumber(targetStrength)
@@ -860,7 +839,6 @@ tabs.fast.FastRebirthWorker = function()
             task.wait(tabs.fast.FastRebirthData.RepDelay)
         end
 
-        -- Actualizar stats
         tabs.fast.FastRebirthStats.Text = "Rebirths: "
             .. utils.formatWithCommas(utils.playerData.Rebirths and utils.playerData.Rebirths.Value or 0)
             .. " | Gained: "
@@ -891,7 +869,159 @@ end)
 tabs.fast:AddLabel("💾 Guarda y re-equipa tus mascotas automáticamente")
 
 -- =====================================================
--- TAB KILLING: Kill Aura + Kill Everyone
+-- TAB PETS: Comprador de Pets + Auto Evolve
+-- =====================================================
+tabs.pets:AddLabel("🛒 Pet Shop:")
+
+tabs.pets.PetShopRuntime = services.ReplicatedStorage:WaitForChild("shared", 30)
+tabs.pets.PetShopRuntime = tabs.pets.PetShopRuntime and tabs.pets.PetShopRuntime:WaitForChild("runtime", 30)
+tabs.pets.PetShopFolder = tabs.pets.PetShopRuntime and tabs.pets.PetShopRuntime:WaitForChild("cPetShopFolder", 30)
+
+tabs.pets.PetShopData = {
+    PetList = {},
+    Selected = {},
+    SelectedList = {},
+    BuyAmount = 1
+}
+
+tabs.pets.AuraData = {
+    AuraList = {},
+    Selected = {},
+    SelectedList = {},
+    BuyAmount = 1
+}
+
+tabs.pets.EvolveData = {Selected = {}, SelectedList = {}, Amount = 1}
+
+if tabs.pets.PetShopFolder then
+    for _, item in ipairs(tabs.pets.PetShopFolder:GetChildren()) do
+        if item:GetAttribute("IsPowerUp") == true then
+            table.insert(tabs.pets.AuraData.AuraList, item.Name)
+        else
+            table.insert(tabs.pets.PetShopData.PetList, item.Name)
+        end
+    end
+    table.sort(tabs.pets.PetShopData.PetList)
+    table.sort(tabs.pets.AuraData.AuraList)
+end
+
+-- Comprador de Pets
+tabs.pets.BuyPetLabel = tabs.pets:AddLabel("Selected Pets: None")
+tabs.pets.BuyPetDropdown = tabs.pets:AddDropdown("Choose Pets", function(text)
+    utils.toggleSelection(tabs.pets.PetShopData.Selected, tabs.pets.PetShopData.SelectedList, text, tabs.pets.BuyPetLabel, "Selected Pets: ")
+end)
+for _, petName in ipairs(tabs.pets.PetShopData.PetList) do
+    tabs.pets.BuyPetDropdown:Add(petName)
+end
+
+tabs.pets:AddTextBox("Buy Amount:", function(text)
+    tabs.pets.PetShopData.BuyAmount = math.max(1, math.floor(tonumber(text) or 1))
+end, {clear = false})
+
+tabs.pets.BuyPetRunning = false
+
+tabs.pets:AddSwitch("Buy Pet", function(bool)
+    tabs.pets.BuyPetRunning = bool
+    if bool then
+        task.spawn(function()
+            while tabs.pets.BuyPetRunning do
+                for _, petName in ipairs(tabs.pets.PetShopData.SelectedList) do
+                    local selectedPet = tabs.pets.PetShopFolder and tabs.pets.PetShopFolder:FindFirstChild(petName)
+                    if selectedPet and utils.remotes.PetShopRemote then
+                        for _ = 1, tabs.pets.PetShopData.BuyAmount do
+                            task.spawn(function(selectedPet)
+                                pcall(function()
+                                    utils.remotes.PetShopRemote:InvokeServer(selectedPet)
+                                end)
+                            end, selectedPet)
+                        end
+                    end
+                end
+                task.wait(0.1)
+            end
+        end)
+    end
+end)
+
+tabs.pets:AddLabel("✨ Auras:")
+
+tabs.pets.AuraLabel = tabs.pets:AddLabel("Selected Auras: None")
+tabs.pets.AuraDropdown = tabs.pets:AddDropdown("Select Auras", function(text)
+    utils.toggleSelection(tabs.pets.AuraData.Selected, tabs.pets.AuraData.SelectedList, text, tabs.pets.AuraLabel, "Selected Auras: ")
+end)
+for _, auraName in ipairs(tabs.pets.AuraData.AuraList) do
+    tabs.pets.AuraDropdown:Add(auraName)
+end
+
+tabs.pets:AddTextBox("Buy Amount:", function(text)
+    tabs.pets.AuraData.BuyAmount = math.max(1, math.floor(tonumber(text) or 1))
+end, {clear = false})
+
+tabs.pets.BuyAuraRunning = false
+
+tabs.pets:AddSwitch("Buy Aura", function(bool)
+    tabs.pets.BuyAuraRunning = bool
+    if bool then
+        task.spawn(function()
+            while tabs.pets.BuyAuraRunning do
+                for _, auraName in ipairs(tabs.pets.AuraData.SelectedList) do
+                    local selectedAura = tabs.pets.PetShopFolder and tabs.pets.PetShopFolder:FindFirstChild(auraName)
+                    if selectedAura and utils.remotes.PetShopRemote then
+                        for _ = 1, tabs.pets.AuraData.BuyAmount do
+                            task.spawn(function(selectedAura)
+                                pcall(function()
+                                    utils.remotes.PetShopRemote:InvokeServer(selectedAura)
+                                end)
+                            end, selectedAura)
+                        end
+                    end
+                end
+                task.wait(0.1)
+            end
+        end)
+    end
+end)
+
+tabs.pets:AddLabel("🧬 Auto Evolving:")
+
+tabs.pets.EvolveLabel = tabs.pets:AddLabel("Selected Pets: None")
+tabs.pets.EvolvePetDropdown = tabs.pets:AddDropdown("Choose Pets", function(text)
+    utils.toggleSelection(tabs.pets.EvolveData.Selected, tabs.pets.EvolveData.SelectedList, text, tabs.pets.EvolveLabel, "Selected Pets: ")
+end)
+for _, petName in ipairs(tabs.pets.PetShopData.PetList) do
+    tabs.pets.EvolvePetDropdown:Add(petName)
+end
+
+tabs.pets:AddTextBox("Evolve Amount:", function(text)
+    tabs.pets.EvolveData.Amount = math.max(1, math.floor(tonumber(text) or 1))
+end, {clear = false})
+
+tabs.pets.AutoEvolveRunning = false
+
+tabs.pets:AddSwitch("Auto Evolve", function(state)
+    tabs.pets.AutoEvolveRunning = state
+    if not state then return end
+
+    task.spawn(function()
+        while tabs.pets.AutoEvolveRunning do
+            for _, petName in ipairs(tabs.pets.EvolveData.SelectedList) do
+                for _ = 1, tabs.pets.EvolveData.Amount do
+                    if utils.remotes.PetEvolveEvent then
+                        pcall(function()
+                            utils.remotes.PetEvolveEvent:FireServer("evolvePet", petName)
+                        end)
+                    end
+                end
+            end
+            task.wait(0.5)
+        end
+    end)
+end)
+
+tabs.pets:AddLabel("⚠️ Need Gems and Inventory Space!")
+
+-- =====================================================
+-- TAB KILLING
 -- =====================================================
 tabs.killing:AddLabel("⚔️ Kill Aura:")
 
@@ -1024,7 +1154,7 @@ tabs.killing:AddButton("Clear Whitelist", function()
 end)
 
 -- =====================================================
--- TAB STATS: Métricas en Tiempo Real
+-- TAB STATS
 -- =====================================================
 tabs.stats.Data = {
     StartTime = tick(),
@@ -1096,21 +1226,21 @@ end)
 -- TAB INFO
 -- =====================================================
 tabs.info:AddLabel("SLK VORTEX")
-tabs.info:AddLabel("Version 8.1 FINAL")
+tabs.info:AddLabel("Version 9.0 FINAL")
 tabs.info:AddLabel("")
 tabs.info:AddLabel("Features:")
 tabs.info:AddLabel("✓ Fast Rep (Ping Control)")
-tabs.info:AddLabel("✓ Fast Rebirth (Simple - No Pet Swap)")
+tabs.info:AddLabel("✓ Fast Rebirth (Auto-Reequip Pets)")
 tabs.info:AddLabel("✓ Auto Rebirth / Auto Rep")
 tabs.info:AddLabel("✓ Auto Rock / Auto King / Auto Exercises")
+tabs.info:AddLabel("✓ Pet Buyer / Aura Buyer")
+tabs.info:AddLabel("✓ Auto Evolve")
 tabs.info:AddLabel("✓ Kill Aura / Kill Everyone")
 tabs.info:AddLabel("✓ Size / Speed / FOV")
 tabs.info:AddLabel("✓ Anti-Fling / Infinite Jump")
 tabs.info:AddLabel("✓ Real-time Stats")
 tabs.info:AddLabel("")
-tabs.info:AddLabel("Credits:")
-tabs.info:AddLabel("- SLK Team - Owner")
-tabs.info:AddLabel("- Based on SilenceScripts")
+tabs.info:AddLabel("Developer: SLK Team")
 
 -- =====================================================
 -- ANTI-AFK
@@ -1131,11 +1261,9 @@ utils.connect(services.Players.LocalPlayer.CharacterAdded, function(character)
     utils.playerData.Humanoid = character:WaitForChild("Humanoid", 10)
     utils.playerData.Backpack = services.Players.LocalPlayer:WaitForChild("Backpack")
 
-    -- Re-obtener muscleEvent por si acaso
     task.wait(1)
     utils.remotes.MuscleEvent = utils.getMuscleEvent()
 
-    -- Reactivar Anti-Fling si estaba activo
     if tabs.main and tabs.main.Protection and tabs.main.Protection.AntiFling.Enabled then
         task.wait(1)
         tabs.main.enableAntiFling()
